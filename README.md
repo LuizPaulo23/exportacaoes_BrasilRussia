@@ -1,0 +1,2 @@
+# exportacaoes_BrasilRussia
+Com o desenrolar do conflito Russo-Ucraniano (2022), o olhar preocupante dos analistas estão voltados para o tabuleiro de xadrez da geopolítica do Leste Euroupeu. Principalmente, dado as circunstâncias das sanções impostas pelas potências do eixo ocidental e as consequências para a economia global. Bem, sob esse contexto de crise, o presente texto busca mapear a relação comercial brasileira com a Rússia, isto é, as exportações destinadas para a Rússia nas últimas décadas.
