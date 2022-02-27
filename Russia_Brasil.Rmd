@@ -1,0 +1,464 @@
+---
+title: "Análise exploratória: Relação de exportação entre Brasil e Rússia (1997-2021)"
+author: "Luiz Paulo T. Gonçalves | Gmail: luizpauloueg@gmail.com"
+date: "27/02/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Resumo
+
+Com o desenrolar do conflito Russo-Ucraniano (2022), o olhar preocupante dos analistas estão voltados para o tabuleiro de xadrez da geopolítica do Leste Euroupeu. Principalmente, dado as circunstâncias das sanções impostas pelas potências do eixo ocidental e as consequências para a economia global. Bem, sob esse contexto de crise, o presente texto busca mapear a relação comercial brasileira com a Rússia, isto é, as exportações destinadas para a Rússia nas últimas décadas. Como de costume, deixo todo código em linguagem R desenvolvido na análise, não obstante, caso tenha caído de paraquedas nesse texto e nunca teve contato com linguagem de programação, pode relaxar e pular direto para a análise exploratória. Não vai afetar em nada sua compreensão. O código é deixado no corpo do texto unicamente com o intuito de replicação dos leitores familiariados com linguagem R. Tenha uma boa leitura! 
+
+# Bibliotecas/Packages utilizadas  
+
+```{r message=F, warning=F, include= T}
+rm(list = ls())
+
+setwd("~/Área de Trabalho/Ciência de Dados: Machine Learning & Deep Learning/COMEX")
+
+# Bibliotecas/Packages
+
+library(data.table) # importação 
+library(readr) # importação 
+library(tidyverse) # manipulação do dataset 
+library(DataExplorer) # análise exploratória 
+library(cowplot) # junção de plotes 
+library(TSstudio) # plotes serie temporal 
+library(echarts4r) # plotes interativo 
+library(plotly) # plotes interativos 
+library(lubridate) # dates and times
+library(dygraphs)  ## plotes interativos
+library(forecast) # series temporais 
+library(downloadthis) # Download csv
+library(geobr) # maps 
+library(ggspatial) # maps 
+library(waffle) # plote 
+library(urca) # Teste de raiz unitária 
+```
+
+# Base de dados utilizada
+
+A análise parte dos dados armazenado no Ministério da Indústria, Comércio Exterior e Serviços, os quais pode ser encontrados para download aqui [[1]](https://www.gov.br/produtividade-e-comercio-exterior/pt-br/assuntos/comercio-exterior/estatisticas/base-de-dados-bruta). Mas, diga-se de passagem, em seguida após a importação e limpeza vou disponibilizar a base limpa para download. 
+
+O detalhemento das bases de impoartação e exportação: 
+
+_Base de dados detalhada por NCM: Arquivos CSV com separador ponto e vírgula (;) detalhado por ano, mês, código NCM, código da unidade estatística, código de país de destino/origem do produto, código da UF de origem/destino do produto, código da via de transporte, código da URF de embarque/desembarque, quantidade estatística, quilograma líquido, valor dólar FOB (US$)_
+
+# Importação do dataset, dos codigos dos países e dos NCMs 
+
+```{r eval=FALSE, message=F, warning=F, include= T}
+
+data.base <- fread("EXP_COMPLETA.csv")
+cod.nation <- fread("PAIS.csv", sep = ";", encoding = "Latin-1")
+cod.ncm <- fread("NCM.csv", sep = ";", encoding = "Latin-1")
+
+# Limpando e organizando a base de dados 
+
+data.base = merge(data.base, cod.nation, by= c("CO_PAIS")) # Unindo os datasets 
+rm(cod.nation) # removendo dataset para limpar memoria 
+data.base = merge(data.base, cod.ncm, by = c("CO_NCM"))
+rm(cod.ncm) # removendo dataset para limpar memoria 
+
+# Filtrando apenas a Russia (1997-2021)
+
+data.base = data.base %>% 
+  filter(NO_PAIS %in% c("Rússia") & 
+           CO_ANO <= 2021) 
+
+# Nomeando os meses 
+
+data.base$CO_MES <- factor(data.base$CO_MES, 
+                           levels = c(1,2,3,4,5,6,7,8,9,10,11,12), 
+                           labels = c("Janeiro", "Fevereiro", "Março", 
+                                      "Abril", "Maio", "Junho", 
+                                      "Julho", "Agosto", "Setembro", 
+                                      "Outubro", "Novembro", "Dezembro"))
+
+# Sumarizando 
+
+data.time <- data.base %>% 
+  select(CO_ANO, VL_FOB, NO_NCM_POR, CO_MES) %>% 
+  rename("Valor Exportado - FOB" = "VL_FOB", 
+         "Time" = "CO_ANO", 
+         "Produto" = "NO_NCM_POR", 
+         "Meses" = "CO_MES")
+
+sumario <- data.time %>% group_by(Time, Meses) %>% 
+  summarise(FOB = sum(`Valor Exportado - FOB`)/10^6)
+
+# Salvando as bases de dados organizadas 
+
+data.time <- write_csv(data.time, file = "data.time.csv")
+sumario <- write_csv(sumario, file = "sumario.csv")
+data.map <- write_csv(data.map, file = "data.map.csv")
+
+```
+
+# Base de dados limpas para Download 
+
+Pronto! As bases de dados limpas estão disponíveis para download, bastar clicar em download nas três bases a seguir: 
+
+```{r message=F, warning=F}
+# Uma pção para reduzir consumo de memória na importação 
+# importar as bases limpas e organizadas 
+
+data.time <- read.csv("data.time.csv")
+sumario <- read_csv("sumario.csv")
+data.map <- read_csv("data.map.csv")
+
+# Datasets limpos para download 
+
+data.time %>%
+  download_this(
+    output_name = "data.time",
+    output_extension = ".csv",
+    button_label = "Download exportações mensais com descrição do produto",
+    button_type = "default",
+    has_icon = T,
+    icon = "fa fa-save",
+    class = "button_large")
+
+sumario %>%
+  download_this(
+    output_name = "sumario",
+    output_extension = ".csv",
+    button_label = "Download sumario das exportações mensais",
+    button_type = "default",
+    has_icon = T,
+    icon = "fa fa-save",
+    class = "button_large")
+
+sumario %>%
+  download_this(
+    output_name = "data.map",
+    output_extension = ".csv",
+    button_label = "Download exportações localizadas por Estado",
+    button_type = "default",
+    has_icon = T,
+    icon = "fa fa-save",
+    class = "button_large")
+
+```
+
+# Análise Exploratória 
+
+Feito as devidas observações, podemos iniciar a análise exploratória dos dados referente ao comércio de exportação Brasil-Rússia. Pois bem, assim iniciemos visualizando a trajetória das exportações para a Rússia ao longo das últimas décadas. Note, leitor, que o gráfico é interativo. Facilitando sua visualização. 
+
+```{r message=FALSE, warning=FALSE, include=T}
+
+# Passando para série temporal 
+
+time.series = ts(data = sumario, 
+                 start = c(1997, 1),
+                 end = c(2021, 12), frequency = 12)
+
+# Plotando em plote interativo 
+dygraph(time.series[, 3],
+                      main = "Exportações para a Rússia (1997-2021)", xlab = "Ano", 
+                     ylab = "Em milhões - FOB (US$)") %>% 
+dyRangeSelector(dateWindow = c("1997-01-01", "2021-12-31"), 
+                fillColor = "red", strokeColor = "blue")
+```
+
+Há um comportamento comum de série temporal, com possíveis pontos de sazonalidade e sem estacionariedade, isto é, rejeitando a hipótese de média e variância constante ao longo do tempo (vamos testar posteriormente). Sem quebra estrutural aparente e com picos, como em abril de 2011 e setembro de 2008. Buscando ir além dentro dessa série temporal, a seguir pode-se visualizar dois painéis de boxplots que vão retornar em melhor tonalidade a trajetória das exportações. 
+
+```{r message=FALSE, warning=FALSE, include=T}
+# Boxplot - por mês 
+
+box.month <- ggplot(sumario) +
+  aes(x = Meses, y = FOB) +
+  geom_boxplot(shape = "circle", fill = "blue", alpha = 0.5) +
+  labs(x = "", y = "Em milhões - FOB (US$)", 
+       title = "Boxplot por Mês - Exportações para a Rússia (1997-2021)", 
+       caption = "Elaboraçao de Luiz Paulo Tavares Gonçalves")+
+  theme_bw()
+
+ggplotly(box.month)
+```
+
+Como esperando, no painel com os boxplots por mês, abril retornou um outlier -- justamente no mês de abril de 2011. Assim como, por óbvio, ocupa o ponto máximo nas exportações com 614.54 milhões. Na dianteira a mediana das exportações é ocupada pelo mês de maio na primeira posição e, em sequência, por: junho, agosto, abril. Do lado oposto, encontra-se: novembro, outubro, fevereiro, janeiro. Ou seja, em um primeiro momento o início do ano e o final do ano não são de alta nas exportações para Rússia. Bem, mas lembre-se da possível sazonalidade mencionada anteriormente (fator que vamos visualziar posteriormente). Agora, vamos ao próximo plote: 
+
+```{r message=FALSE, warning=FALSE, include=T}
+# Boxplot por Ano 
+
+box.year <- ggplot(sumario) +
+  aes(x =Time, y = FOB) +
+  geom_boxplot(shape = "circle", fill = "blue", alpha = 0.5) +
+  labs(x = "", y = "Em milhões - FOB (US$)", 
+       title = "Boxplot por Ano - Exportações para a Rússia (1997-2021)", 
+       caption = "Elaboração de Luiz Paulo Tavares Gonçalves")+
+  theme_bw()
+
+ggplotly(box.year)
+```
+
+Basicamente, os boxplots anuais são a representação da série temporal plotada anteriormente, porém aqui podemos visualizar de forma detalhadas as métricas de centralidade e pontos discrepantes dentro de cada ano. Observamos um "ano estranho", ali em 2019, com pontos discrepantes nas duas direções. Na dianteira a mediana das exportações é ocupado pelo ano de 2008 e, por outro lado, o ano 2000 ocupa a menor posição. Assim como no plote da série, nota-se um aumento com oscilações das exportações e um decaimento após o pico de abril de 2011. 
+
+Ah! Caso tenha restado dúvida, a distribuição das exportações de fato não  segue uma distribuição Gaussiana. Reijeitando a normalidade com o teste de Shapiro-Wilk como pode ser observado no histograma a seguir: 
+
+```{r message=FALSE, warning=FALSE, include=T}
+ggplot(aes(x= FOB),
+       data = sumario)+
+  geom_histogram(aes(y=..density..), bins = 30L, fill = "blue", alpha = 0.5)+
+  geom_density(color="red")+
+  xlab("")+
+  ylab("Densidade")+
+  ggtitle("Histograma - Dist. Exportações para Rússia (1997-2021)",
+          subtitle = "P-valor do teste de Shapiro-Wilk: 6.306e-10")+
+  theme_bw()
+```
+
+Podemos desagregar esses dados das exportações e olhar as exportações por Estado brasileiro. Assim, segue: 
+
+
+```{r message=FALSE, warning=FALSE, include=T}
+# Visualizao por Estado 
+
+data.map <- data.map %>% 
+  select(SG_UF_NCM, CO_ANO, CO_MES, 
+         VL_FOB) %>% 
+  mutate()
+
+uf <- data.map %>% 
+  group_by(SG_UF_NCM, CO_ANO) %>% 
+  summarise(fob = sum(VL_FOB)/10^6)
+
+graf.uf <- uf %>%
+  filter(CO_ANO >= 2020L & CO_ANO <= 2021L) %>%
+  ggplot() +
+  aes(x =reorder(SG_UF_NCM, fob), weight = fob) +
+  geom_bar(fill = "blue", alpha = 0.5) +
+  labs(y = "Em milhões - FOB (US$)", x = "Estados",
+       title = "Exportações para a Russia por Estado de origem (2020-2021)",
+       caption = "Elaboração de Luiz Paulo T. Gonçalves")+
+  theme_bw() +
+  facet_wrap(vars(CO_ANO), nrow = 2L)
+ggplotly(graf.uf)
+```
+
+
+```{r message=F, warning=F, include=F}
+# Plotando mapas 
+geo <- read_state(code_state = "all", year = 2016)
+```
+
+
+```{r message=F, warning=F, include=T}
+geo <- geo %>% 
+  rename("SG_UF_NCM" = "abbrev_state")
+
+maps = merge(uf, geo, by = c("SG_UF_NCM"))
+maps <- maps %>% 
+  filter(CO_ANO == 2021)
+
+
+plote.map <- ggplot(maps$geom)+geom_sf(aes(fill= maps$fob))+
+  scale_fill_viridis_c(direction = -1, limits = c(0.0535, 403.1440))+
+  labs(fill = "FOB (US$)",
+         title = "Exportações para a Russia por Estado de origem (2021)",
+         subtitle = "") +
+  annotation_north_arrow(
+    location = "br",
+    which_north = "true",
+    height = unit(1, "cm"),
+    width = unit(1, "cm"),
+    pad_x = unit(0.1, "in"),
+    pad_y = unit(0.1, "in"),
+    style = north_arrow_fancy_orienteering)+
+  ggspatial::annotation_scale()+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplotly(plote.map)
+```
+
+Como pode ser observado, São Paulo é responsável pela maior parcela das exportações. Apenas São Paulo controlou, em 2021, 25.40% das exportações para a Rússia. Seguido por MT, PR e MG. Apenas esses 4 Estados foram responsáveis por quase 67% das exportações, isto é, as UF que obtiveram mais de 10% de participação nas exportações: 
+
+```{r}
+por.uf <- uf %>% filter(CO_ANO == 2021)%>% 
+  mutate(porcentagem = (fob/1587.205)*100) %>% 
+  rename("UFs" = "SG_UF_NCM") %>% 
+  filter(porcentagem > 10.00)
+ 
+ggplot(data = por.uf, 
+       aes(fill = UFs, values = porcentagem)) +
+  geom_waffle(n_rows = 10, size = 0.5, colour = "#ffffff",flip = F) +
+  coord_equal() +
+  theme_minimal() +
+  theme_enhance_waffle() +
+  labs(title = "Parcela das exportação para Rússia por Estado em 2021 (%)",
+       subtitle = "Aproximadamente 25.40% das exportações para a Rússia são de São Paulo
+16.02% de MT | 14.13% de PR | 11.59% de MG",
+       caption = "Elaboração de Luiz Paulo T. Gonçalves")
+```
+
+# Análise Exploratória - Parte II
+
+Outra questão que podemos levantar são os produtos exportados. Vou deixar uma tabela com todos os produtos exportados e, no final, os principais produtos que compõem as exportações para Rússia no plote 
+
+```{r}
+# Produtos exportados 
+
+base.export <- data.time %>% 
+  filter(Time == 2021) %>% 
+  rename("FOB" = "Valor.Exportado...FOB") 
+
+# Sumarizar em ordem decrescente 
+
+best.export = base.export %>% 
+  group_by(Produto) %>% 
+  summarise(FOB = sum(FOB), 
+            FOB = FOB/10^6) %>% 
+  arrange(desc(FOB))
+
+# Passando para uma tabela interativa 
+
+best.export %>% head(1068) %>% 
+  DT::datatable()
+
+top<- best.export %>%
+  filter(FOB >= 30L & FOB <= 345L) %>%
+  ggplot() +
+  aes(x = reorder(Produto,FOB), weight = FOB) +
+  geom_bar(fill = "blue", alpha = 0.5) +
+  labs(x = "", y = "Em milhões FOB US$", 
+       title = "")+
+  coord_flip()+
+  theme_bw()
+
+ggplotly(top)
+```
+
+# Análise Exploratória - Parte II
+
+Até aqui conseguimos levantar algumas informações interessantes. Não obstante, vamos voltar em um ponto levantado anteriormente: a série temporal das exportação e a sazonalidade. Essa parte II busca ser relativamente mais técnica que a anterior. Pois bem, feito essas ponderação, inicia-se fazendo a decomposição aditiva da série temporal. O Modelo Aditivo representa séries temporais como adições de todos os três componentes:
+Série Temporal = Tendência + Sazonal + Aleatória
+
+```{r message=FALSE, warning=FALSE, include= T}
+# Decompondo a série temporal 
+
+ts_decompose(time.series[, 3], 
+             type = "additive")
+```
+
+Tendência não é bem definida. A seguir pode-ser observar alguns plotes buscando mapear a sazonalidade. Observe que não ficou tão óbvio visualmente como esperado (pelo menos eu esperava). Há pontos em maio que chamam atenção, assim como, decaimento em novembro e leve aumento em dezembro que também chamam atenção. No último plote fica "mais" evidente, o aumento continuo e paulatino até junho; depois decai em julho ficando constante até uma queda em novembro e, novamente, um leve aumento em dezembro.  
+
+```{r message=FALSE, warning=FALSE, include= T}
+# Analisando a presença de sazonalidade 
+
+month.time <- ggseasonplot(time.series[, 3], year.labels = TRUE) +
+  geom_point() + labs(
+    x = "", y = "Em milhões - FOB (US$)", 
+    title = "Exportações para a Rússia (1997-2021)", 
+    caption = "Elaboração de Luiz Paulo Tavares Gonçalves")+
+  theme_bw()
+
+ggplotly(month.time) # Passando para o modo interativo 
+
+ggseasonplot(time.series[, 3], polar = T)+
+  labs(x = "Meses", y = "Em milhões - FOB (US$)",
+       title = "Verificando possíveis pontos de sazonalidade", 
+       caption = "Elaboração de Luiz Paulo Tavares Gonçalves")+
+  theme_bw()
+
+# Heatmap
+
+ts_heatmap(time.series[, 3], 
+           title = "Heatmap - Exportações para a Rússia (1997-2021) ")
+
+
+```
+
+
+```{r}
+monthplot(time.series[, 3], col.base = 2, lty.base = 2)
+legend("topleft", legend = c("FOB", "Média"), lty = c(1,2), 
+        col = c(1,2), bty = "n")
+
+```
+
+# ACF: Função de Autocorrelação 
+
+Bem, agora vamos passar para outro ponto importante: autocorrelação. Eu já escrevi um texto só sobre autocorrelação, quem quiser conferir [[2]](https://medium.com/p/5f14a19d3fc). 
+
+Um conjunto de autocorrelações rk formam um função de autocorrelação (ACF) de xt. Autocorrelação segue de perto a correlação de Pearson, porém correlacionando a série com ela mesmo num dado período de defasagem. Assim, a autocorrelação amostral de k-ésima ordem de xt pode ser definida como:
+
+$$
+rk = \frac{\sum^T_{t = k+1}(x_{t}-\overline{x})(x_{t-k}-\overline{x})}{\sum^T_{t=1}(x_{t}-\overline{x})^2}
+$$
+
+O qual pode ser visualizada em um correlograma. Por princípio:
+
+_Uma autocorrelação de primeira ordem (t-1) representa uma correlação com o período anterior (como, por exemplo, o PIB do terceiro trimestre com o segundo trimestre);_
+
+_Uma autocorrelação de segunda ordem (t-2) representa uma correlação com 2 unidades de tempo passado;_
+
+_E assim sucessivamente._
+
+Assim, temos a Função de Autocorrelação. Vou configurar com 12 e 72 lags ou 1 e 6 anos, vamos ver os resultados: 
+
+```{r}
+ggAcf(time.series[, 3], lag.max = 12 , col = "red")+
+  theme_bw()+
+  ggtitle("Função de Autocorrelação 12 lags -  Exportações FOB (U$$)", 
+     subtitle = "Elaboração de Luiz Paulo T. Gonçalves")
+
+ggAcf(time.series[, 3], lag.max = 72 , col = "red")+
+  theme_bw()+
+  ggtitle("Função de Autocorrelação 72 lags -  Exportações FOB (U$$)", 
+     subtitle = "Elaboração de Luiz Paulo T. Gonçalves")
+```
+
+Autoevidente a presença de autocorrelação apenas com a visualização. Vamos plotar essas autocorrelações para passar do autoevidente para obviedade ululante: 
+
+
+```{r}
+ts_lags(time.series[, 3], lags = 1:12)
+ts_lags(time.series[, 3], lags = 12:24)
+ts_lags(time.series[, 3], lags = 24:36)
+ts_lags(time.series[, 3], lags = 36:48)
+ts_lags(time.series[, 3], lags = 48:60)
+ts_lags(time.series[, 3], lags = 60:72)
+```
+
+Como pode ser observado, até o lag 56 há uma autocorrelação consistente. 
+
+# Teste de Raiz unitária 
+
+À guisa de conclusão, finalizo a parte I testando a hipótese de estacionariedade ou raiz unitária. Foi aplicado o clássico teste de Dickey Fuller e de Philips-Peron. Como pode ser observado, em ambos foi rejeitado a hipótese estacionária. As hipótese dos teste segue: 
+
+Teste pp (Philips-Perron)
+
+Ho = estacionário: p > 0.05
+
+Ha = não estacionário: p <= 0.05
+
+
+Teste df (Dickey Fuller)
+
+Ho = não estacionário: teste estatístico > valor crítico
+
+Ha =  estacionário:  teste estatístico < valor crítico
+
+```{r}
+# Teste pp (Philips-Perron)
+pp <- ur.pp(time.series[, 3])
+summary(pp)
+
+# Teste df (Dickey Fuller)
+
+df2 <- ur.df(time.series[, 3])
+summary(df2)
+
+```
+
+# Parte II 
+
+A sequência pretende fechar alguns pontos abertos na parte I (como sazonalidade e ajuste sazonal, por exemplo) e partir para uma análise bivariada com os dados das importações derivadas da Rússia para o Brasil. Por hoje é isso. 
+
+
+
